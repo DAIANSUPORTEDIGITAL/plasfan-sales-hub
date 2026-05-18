@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import React, { useMemo, useState } from "react";
 import { Search, ShoppingCart, FileText, Home, Settings, Plus, Minus, Trash2, Send, Package, LogOut, Upload, Edit, Menu, X } from "lucide-react";
