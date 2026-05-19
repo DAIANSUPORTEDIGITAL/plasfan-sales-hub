@@ -121,7 +121,7 @@ const [dbProducts, setDbProducts] = useState(initialProducts);
 const [dbCategories, setDbCategories] = useState([]);
 const [loadingProducts, setLoadingProducts] = useState(false);
 const [editingProductId, setEditingProductId] = useState(null);
-
+const [uploadingImage, setUploadingImage] = useState(false);
 const emptyProductForm = {
   codigo: "",
   nome: "",
@@ -229,7 +229,40 @@ async function startEditProduct(product: any) {
 
   setScreen("product-form");
 }
+async function uploadProductImage(file: File) {
+  if (!file) return;
 
+  setUploadingImage(true);
+
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+  const filePath = `produtos/${fileName}`;
+
+  const { error } = await supabase.storage
+    .from("produtos")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("Erro ao enviar imagem:", error);
+    alert("Erro ao enviar imagem.");
+    setUploadingImage(false);
+    return;
+  }
+
+  const { data } = supabase.storage
+    .from("produtos")
+    .getPublicUrl(filePath);
+
+  setProductForm({
+    ...productForm,
+    imagem_url: data.publicUrl,
+  });
+
+  setUploadingImage(false);
+}
 async function saveProduct() {
   if (!productForm.codigo || !productForm.nome || !productForm.categoria_id) {
     alert("Preencha código, nome e categoria.");
@@ -757,13 +790,36 @@ const ProductForm = () => (
         </div>
 
         <div>
-          <label className="text-sm font-medium text-slate-700">URL da imagem</label>
-          <input
-            value={productForm.imagem_url}
-            onChange={(e) => setProductForm({ ...productForm, imagem_url: e.target.value })}
-            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
-          />
-        </div>
+  <label className="text-sm font-medium text-slate-700">Imagem do produto</label>
+
+  <input
+    type="file"
+    accept="image/*"
+    capture="environment"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      if (file) uploadProductImage(file);
+    }}
+    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-[#2BA64A]"
+  />
+
+  {uploadingImage && (
+    <p className="mt-2 text-sm text-slate-500">Enviando imagem...</p>
+  )}
+
+  {productForm.imagem_url && (
+    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <img
+        src={productForm.imagem_url}
+        alt="Prévia do produto"
+        className="h-40 w-full rounded-xl object-contain"
+      />
+      <p className="mt-2 break-all text-xs text-slate-500">
+        {productForm.imagem_url}
+      </p>
+    </div>
+  )}
+</div>
 
         <div className="md:col-span-2">
           <label className="text-sm font-medium text-slate-700">Descrição</label>
