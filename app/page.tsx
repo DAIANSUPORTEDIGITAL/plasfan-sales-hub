@@ -407,14 +407,16 @@ async function deactivateProduct(productId: string) {
     );
   }
 
-  const navItems = [
-    { id: "dashboard", label: "Início", icon: Home },
-    { id: "catalog", label: "Catálogo", icon: Search },
-    { id: "quote", label: "Orçamento", icon: ShoppingCart },
-    { id: "materials", label: "Materiais", icon: FileText },
-  ];
+const navItems = [
+  { id: "dashboard", label: "Início", icon: Home },
+  { id: "catalog", label: "Catálogo", icon: Search },
+  { id: "quote", label: "Orçamento", icon: ShoppingCart },
+  { id: "materials", label: "Materiais", icon: FileText },
+];
 
-  if (role === "admin") navItems.push({ id: "admin", label: "Admin", icon: Settings });
+if (role === "admin") {
+  navItems.push({ id: "admin", label: "Administrador", icon: Settings });
+}
 
   const Header = () => (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
@@ -465,8 +467,8 @@ async function deactivateProduct(productId: string) {
   const Dashboard = () => (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-[#132B55]">Bem-vindo ao App Comercial Plasfan</h2>
-        <p className="mt-1 text-slate-600">Escolha uma das opções abaixo para iniciar o atendimento comercial.</p>
+        <h2 className="text-2xl font-bold text-[#132B55]">Catálogo de Produtos</h2>
+        <p className="text-slate-600">Busque produtos e adicione à lista de orçamento.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="cursor-pointer hover:shadow-md" onClick={() => setScreen("catalog")}>
