@@ -1,9 +1,13 @@
 // @ts-nocheck
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, ShoppingCart, FileText, Home, Settings, Plus, Minus, Trash2, Send, Package, LogOut, Upload, Edit, Menu, X } from "lucide-react";
 import { motion } from "framer-motion";
-
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 const COMPANY = {
   name: "Plasfan",
   appName: "App Comercial Plasfan",
@@ -113,8 +117,56 @@ export default function PlasfanSalesHubPrototype() {
   const [clientPhone, setClientPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
+const [dbProducts, setDbProducts] = useState(initialProducts);
+const [loadingProducts, setLoadingProducts] = useState(false);
 
-  const products = initialProducts.filter((p) => p.active);
+useEffect(() => {
+  async function loadProducts() {
+    setLoadingProducts(true);
+
+    const { data, error } = await supabase
+      .from("produtos")
+      .select(`
+        id,
+        codigo,
+        nome,
+        descricao,
+        unidade,
+        preco,
+        imagem_url,
+        palavras_chave,
+        observacoes,
+        ativo,
+        categorias (
+          nome
+        )
+      `)
+      .eq("ativo", true)
+      .order("codigo");
+
+    if (!error && data) {
+      const formatted = data.map((item: any) => ({
+        id: item.id,
+        code: item.codigo,
+        name: item.nome,
+        category: item.categorias?.nome || "Sem categoria",
+        unit: item.unidade,
+        price: Number(item.preco || 0),
+        description: item.descricao || "",
+        keywords: item.palavras_chave || "",
+        image: item.imagem_url || "https://placehold.co/600x400?text=Produto",
+        active: item.ativo,
+      }));
+
+      setDbProducts(formatted);
+    }
+
+    setLoadingProducts(false);
+  }
+
+  loadProducts();
+}, []);
+  const products = dbProducts.filter((p) => p.active);
   const categories = ["Todos", ...Array.from(new Set(products.map((p) => p.category)))];
 
   const filteredProducts = useMemo(() => {
