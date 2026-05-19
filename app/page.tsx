@@ -118,54 +118,191 @@ export default function PlasfanSalesHubPrototype() {
   const [notes, setNotes] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
 const [dbProducts, setDbProducts] = useState(initialProducts);
+const [dbCategories, setDbCategories] = useState([]);
 const [loadingProducts, setLoadingProducts] = useState(false);
+const [editingProductId, setEditingProductId] = useState(null);
 
-useEffect(() => {
-  async function loadProducts() {
-    setLoadingProducts(true);
+const emptyProductForm = {
+  codigo: "",
+  nome: "",
+  descricao: "",
+  unidade: "Unidade",
+  preco: "",
+  imagem_url: "",
+  palavras_chave: "",
+  observacoes: "",
+  categoria_id: "",
+  ativo: true,
+};
 
-    const { data, error } = await supabase
-      .from("produtos")
-      .select(`
-        id,
-        codigo,
-        nome,
-        descricao,
-        unidade,
-        preco,
-        imagem_url,
-        palavras_chave,
-        observacoes,
-        ativo,
-        categorias (
-          nome
-        )
-      `)
-      .eq("ativo", true)
-      .order("codigo");
+const [productForm, setProductForm] = useState(emptyProductForm);
 
-    if (!error && data) {
-      const formatted = data.map((item: any) => ({
-        id: item.id,
-        code: item.codigo,
-        name: item.nome,
-        category: item.categorias?.nome || "Sem categoria",
-        unit: item.unidade,
-        price: Number(item.preco || 0),
-        description: item.descricao || "",
-        keywords: item.palavras_chave || "",
-        image: item.imagem_url || "https://placehold.co/600x400?text=Produto",
-        active: item.ativo,
-      }));
+async function loadProducts() {
+  setLoadingProducts(true);
 
-      setDbProducts(formatted);
-    }
+  const { data, error } = await supabase
+    .from("produtos")
+    .select(`
+      id,
+      categoria_id,
+      codigo,
+      nome,
+      descricao,
+      unidade,
+      preco,
+      imagem_url,
+      palavras_chave,
+      observacoes,
+      ativo,
+      categorias (
+        nome
+      )
+    `)
+    .eq("ativo", true)
+    .order("codigo");
 
-    setLoadingProducts(false);
+  if (!error && data) {
+    const formatted = data.map((item: any) => ({
+      id: item.id,
+      categoryId: item.categoria_id,
+      code: item.codigo,
+      name: item.nome,
+      category: item.categorias?.nome || "Sem categoria",
+      unit: item.unidade,
+      price: Number(item.preco || 0),
+      description: item.descricao || "",
+      keywords: item.palavras_chave || "",
+      image: item.imagem_url || "https://placehold.co/600x400?text=Produto",
+      observacoes: item.observacoes || "",
+      active: item.ativo,
+    }));
+
+    setDbProducts(formatted);
   }
 
+  setLoadingProducts(false);
+}
+
+async function loadCategories() {
+  const { data, error } = await supabase
+    .from("categorias")
+    .select("id, nome, slug")
+    .eq("ativo", true)
+    .order("ordem");
+
+  if (error) {
+    console.error("Erro ao carregar categorias:", error);
+    return;
+  }
+
+  setDbCategories(data || []);
+}
+
+useEffect(() => {
   loadProducts();
+  loadCategories();
 }, []);
+async function startNewProduct() {
+  await loadCategories();
+  setEditingProductId(null);
+  setProductForm(emptyProductForm);
+  setScreen("product-form");
+}
+
+async function startEditProduct(product: any) {
+  await loadCategories();
+
+  setEditingProductId(product.id);
+
+  setProductForm({
+    codigo: product.code || "",
+    nome: product.name || "",
+    descricao: product.description || "",
+    unidade: product.unit || "Unidade",
+    preco: String(product.price || ""),
+    imagem_url: product.image || "",
+    palavras_chave: product.keywords || "",
+    observacoes: product.observacoes || "",
+    categoria_id: product.categoryId || "",
+    ativo: true,
+  });
+
+  setScreen("product-form");
+}
+
+async function saveProduct() {
+  if (!productForm.codigo || !productForm.nome || !productForm.categoria_id) {
+    alert("Preencha código, nome e categoria.");
+    return;
+  }
+
+  const { data: empresa, error: empresaError } = await supabase
+    .from("empresas")
+    .select("id")
+    .eq("slug", "plasfan")
+    .single();
+
+  if (empresaError || !empresa) {
+    alert("Erro ao localizar a empresa Plasfan.");
+    return;
+  }
+
+  const payload = {
+    empresa_id: empresa.id,
+    categoria_id: productForm.categoria_id,
+    codigo: productForm.codigo,
+    nome: productForm.nome,
+    descricao: productForm.descricao,
+    unidade: productForm.unidade,
+    preco: Number(String(productForm.preco).replace(",", ".")) || 0,
+    imagem_url: productForm.imagem_url,
+    palavras_chave: productForm.palavras_chave,
+    observacoes: productForm.observacoes,
+    ativo: productForm.ativo,
+  };
+
+  let response;
+
+  if (editingProductId) {
+    response = await supabase
+      .from("produtos")
+      .update(payload)
+      .eq("id", editingProductId);
+  } else {
+    response = await supabase
+      .from("produtos")
+      .insert(payload);
+  }
+
+  if (response.error) {
+    alert("Erro ao salvar produto.");
+    console.error(response.error);
+    return;
+  }
+
+  alert("Produto salvo com sucesso!");
+  setProductForm(emptyProductForm);
+  setEditingProductId(null);
+  await loadProducts();
+  setScreen("admin-products");
+}
+
+async function deactivateProduct(productId: string) {
+  const confirmDelete = confirm("Deseja desativar este produto?");
+  if (!confirmDelete) return;
+
+  const { error } = await supabase
+    .from("produtos")
+    .update({ ativo: false })
+    .eq("id", productId);
+
+  if (error) {
+    alert("Erro ao desativar produto.");
+    return;
+  }
+
+  await loadProducts();
+}
   const products = dbProducts.filter((p) => p.active);
   const categories = ["Todos", ...Array.from(new Set(products.map((p) => p.category)))];
 
@@ -377,7 +514,11 @@ useEffect(() => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredProducts.map((product) => (
           <Card key={product.id}>
-            <img src={product.image} alt="" className="mb-4 h-36 w-full rounded-2xl object-cover bg-slate-100" />
+            <img
+  src={product.image}
+  alt={product.name}
+  className="mb-4 h-44 w-full rounded-2xl bg-slate-100 object-contain p-3"
+/>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2BA64A]">{product.category}</div>
             <h3 className="font-bold text-[#132B55]">{product.name}</h3>
             <p className="mt-1 text-sm text-slate-600">Código: {product.code}</p>
@@ -495,7 +636,168 @@ useEffect(() => {
       </div>
     </div>
   );
+const AdminProducts = () => (
+  <div className="space-y-5">
+    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+      <div>
+        <h2 className="text-2xl font-bold text-[#132B55]">Gerenciar Produtos</h2>
+        <p className="text-slate-600">Cadastre, edite ou desative produtos do catálogo.</p>
+      </div>
 
+      <div className="flex gap-2">
+        <Button variant="ghost" onClick={() => setScreen("admin")}>
+          Voltar
+        </Button>
+        <Button onClick={startNewProduct}>
+          <Plus size={16} />
+          Novo Produto
+        </Button>
+      </div>
+    </div>
+
+    <div className="grid gap-3">
+      {products.map((product) => (
+        <Card key={product.id}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="font-bold text-[#132B55]">{product.name}</h3>
+              <p className="text-sm text-slate-600">
+                Código: {product.code} • Categoria: {product.category} • Unidade: {product.unit}
+              </p>
+              <p className="mt-1 font-bold">{currency(product.price)}</p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => startEditProduct(product)}>
+                <Edit size={16} />
+                Editar
+              </Button>
+              <Button variant="danger" onClick={() => deactivateProduct(product.id)}>
+                <Trash2 size={16} />
+                Desativar
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  </div>
+);
+
+const ProductForm = () => (
+  <div className="mx-auto max-w-3xl space-y-5">
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-bold text-[#132B55]">
+          {editingProductId ? "Editar Produto" : "Novo Produto"}
+        </h2>
+        <p className="text-slate-600">Preencha os dados do produto.</p>
+      </div>
+
+      <Button variant="ghost" onClick={() => setScreen("admin-products")}>
+        Voltar
+      </Button>
+    </div>
+
+    <Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className="text-sm font-medium text-slate-700">Código</label>
+          <input
+            value={productForm.codigo}
+            onChange={(e) => setProductForm({ ...productForm, codigo: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700">Nome do produto</label>
+          <input
+            value={productForm.nome}
+            onChange={(e) => setProductForm({ ...productForm, nome: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700">Categoria</label>
+          <select
+            value={productForm.categoria_id}
+            onChange={(e) => setProductForm({ ...productForm, categoria_id: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          >
+            <option value="">Selecione</option>
+            {dbCategories.map((cat: any) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700">Unidade</label>
+          <input
+            value={productForm.unidade}
+            onChange={(e) => setProductForm({ ...productForm, unidade: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700">Preço</label>
+          <input
+            value={productForm.preco}
+            onChange={(e) => setProductForm({ ...productForm, preco: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+            placeholder="Ex: 29.90"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700">URL da imagem</label>
+          <input
+            value={productForm.imagem_url}
+            onChange={(e) => setProductForm({ ...productForm, imagem_url: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-slate-700">Descrição</label>
+          <textarea
+            value={productForm.descricao}
+            onChange={(e) => setProductForm({ ...productForm, descricao: e.target.value })}
+            className="mt-1 min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-slate-700">Palavras-chave</label>
+          <input
+            value={productForm.palavras_chave}
+            onChange={(e) => setProductForm({ ...productForm, palavras_chave: e.target.value })}
+            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+            placeholder="Ex: mangueira, pvc, construção"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-slate-700">Observações</label>
+          <textarea
+            value={productForm.observacoes}
+            onChange={(e) => setProductForm({ ...productForm, observacoes: e.target.value })}
+            className="mt-1 min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#2BA64A]"
+          />
+        </div>
+      </div>
+
+      <Button className="mt-6 w-full" onClick={saveProduct}>
+        Salvar Produto
+      </Button>
+    </Card>
+  </div>
+);
   const Admin = () => (
     <div className="space-y-5">
       <div>
@@ -503,7 +805,15 @@ useEffect(() => {
         <p className="text-slate-600">Nesta primeira versão, o painel é um protótipo visual das funções administrativas.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card><Package className="mb-4 text-[#2BA64A]" /><h3 className="font-bold text-[#132B55]">Produtos</h3><p className="mt-1 text-sm text-slate-600">Cadastrar, editar e desativar produtos.</p><Button className="mt-4 w-full" variant="ghost"><Edit size={16} />Gerenciar</Button></Card>
+        <Card>
+  <Package className="mb-4 text-[#2BA64A]" />
+  <h3 className="font-bold text-[#132B55]">Produtos</h3>
+  <p className="mt-1 text-sm text-slate-600">Cadastrar, editar e desativar produtos.</p>
+  <Button className="mt-4 w-full" variant="ghost" onClick={() => setScreen("admin-products")}>
+    <Edit size={16} />
+    Gerenciar
+  </Button>
+</Card>
         <Card><Upload className="mb-4 text-[#2BA64A]" /><h3 className="font-bold text-[#132B55]">Importação</h3><p className="mt-1 text-sm text-slate-600">Enviar planilha CSV/XLSX de produtos.</p><Button className="mt-4 w-full" variant="ghost"><Upload size={16} />Importar</Button></Card>
         <Card><FileText className="mb-4 text-[#2BA64A]" /><h3 className="font-bold text-[#132B55]">Materiais</h3><p className="mt-1 text-sm text-slate-600">Organizar PDFs, campanhas e apresentações.</p><Button className="mt-4 w-full" variant="ghost">Gerenciar</Button></Card>
         <Card><Settings className="mb-4 text-[#2BA64A]" /><h3 className="font-bold text-[#132B55]">Configurações</h3><p className="mt-1 text-sm text-slate-600">Editar logo, cores e WhatsApp comercial.</p><Button className="mt-4 w-full" variant="ghost">Configurar</Button></Card>
@@ -526,6 +836,8 @@ useEffect(() => {
           {screen === "quote" && <Quote />}
           {screen === "materials" && <Materials />}
           {screen === "admin" && <Admin />}
+          {screen === "admin-products" && AdminProducts()}
+          {screen === "product-form" && ProductForm()}
         </motion.div>
       </main>
       <BottomNav />
