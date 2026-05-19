@@ -158,7 +158,6 @@ async function loadProducts() {
         nome
       )
     `)
-    .eq("ativo", true)
     .order("codigo");
 
   if (!error && data) {
@@ -320,23 +319,26 @@ async function saveProduct() {
   setScreen("admin-products");
 }
 
-async function deactivateProduct(productId: string) {
-  const confirmDelete = confirm("Deseja desativar este produto?");
-  if (!confirmDelete) return;
+async function toggleProductStatus(productId: string, currentStatus: boolean) {
+  const actionText = currentStatus ? "desativar" : "reativar";
+  const confirmAction = confirm(`Deseja ${actionText} este produto?`);
+
+  if (!confirmAction) return;
 
   const { error } = await supabase
     .from("produtos")
-    .update({ ativo: false })
+    .update({ ativo: !currentStatus })
     .eq("id", productId);
 
   if (error) {
-    alert("Erro ao desativar produto.");
+    alert(`Erro ao ${actionText} produto.`);
     return;
   }
 
   await loadProducts();
 }
   const products = dbProducts.filter((p) => p.active);
+  const adminProducts = dbProducts;
   const categories = ["Todos", ...Array.from(new Set(products.map((p) => p.category)))];
 
   const filteredProducts = useMemo(() => {
@@ -676,7 +678,7 @@ const AdminProducts = () => (
     <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
       <div>
         <h2 className="text-2xl font-bold text-[#132B55]">Gerenciar Produtos</h2>
-        <p className="text-slate-600">Cadastre, edite ou desative produtos do catálogo.</p>
+        <p className="text-slate-600">Cadastre, edite, desative ou reative produtos do catálogo.</p>
       </div>
 
       <div className="flex gap-2">
@@ -691,7 +693,7 @@ const AdminProducts = () => (
     </div>
 
     <div className="grid gap-3">
-      {products.map((product) => (
+      {adminProducts.map((product) => (
         <Card key={product.id}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -700,16 +702,30 @@ const AdminProducts = () => (
                 Código: {product.code} • Categoria: {product.category} • Unidade: {product.unit}
               </p>
               <p className="mt-1 font-bold">{currency(product.price)}</p>
+
+              <span
+                className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                  product.active
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {product.active ? "Ativo" : "Inativo"}
+              </span>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="ghost" onClick={() => startEditProduct(product)}>
                 <Edit size={16} />
                 Editar
               </Button>
-              <Button variant="danger" onClick={() => deactivateProduct(product.id)}>
+
+              <Button
+                variant={product.active ? "danger" : "ghost"}
+                onClick={() => toggleProductStatus(product.id, product.active)}
+              >
                 <Trash2 size={16} />
-                Desativar
+                {product.active ? "Desativar" : "Reativar"}
               </Button>
             </div>
           </div>
